@@ -1,0 +1,93 @@
+/* PropertyMap Component Styles */
+.property-map-container {
+  position: relative;
+  width: 100%;
+  height: 320px; /* 80 * 4 = 320px (h-80) */
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: #f3f4f6;
+}
+
+.property-map-container .leaflet-container {
+  height: 100% !important;
+  width: 100% !important;
+  border-radius: 0.5rem;
+}
+
+.property-map-container .leaflet-map-pane {
+  border-radius: 0.5rem;
+}
+
+.property-map-container .leaflet-tile-pane {
+  border-radius: 0.5rem;
+}
+
+.property-map-container .leaflet-popup-content-wrapper {
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.property-map-container .leaflet-popup-content {
+  margin: 0.75rem;
+  min-width: 200px;
+}
+
+.property-map-container .leaflet-popup-tip {
+  background: white;
+}
+
+.property-map-container .leaflet-control-zoom {
+  border: none;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.property-map-container .leaflet-control-zoom a {
+  background: white;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.375rem;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.property-map-container .leaflet-control-zoom a:hover {
+  background: #f9fafb;
+  color: #111827;
+  border-color: #d1d5db;
+}
+
+.property-map-container .leaflet-control-zoom a:active {
+  background: #f3f4f6;
+}
+
+/* Fallback styles for when map is not available */
+.property-map-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  background: #f3f4f6;
+  border-radius: 0.5rem;
+}
+
+.property-map-fallback-content {
+  text-align: center;
+  color: #6b7280;
+}
+
+.property-map-fallback-content svg {
+  margin: 0 auto 0.5rem;
+  color: #9ca3af;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .property-map-container {
+    height: 280px;
+  }
+  
+  .property-map-container .leaflet-popup-content {
+    min-width: 180px;
+    margin: 0.5rem;
+  }
+}
