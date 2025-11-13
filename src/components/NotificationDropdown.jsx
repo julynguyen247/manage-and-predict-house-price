@@ -1,31 +1,31 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Bell, X, Clock, Check } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { useNotifications } from '../contexts/NotificationContext';
-import { formatMessageWithRanges } from '../utils/notificationFormatter';
-import { baseUrlWeb } from '../base';
+import React, { useState, useEffect, useRef } from "react";
+import { Bell, X, Clock, Check } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useNotifications } from "../contexts/NotificationContext";
+import { formatMessageWithRanges } from "../utils/notificationFormatter";
+import { baseUrlWeb } from "../base";
 
 const NotificationDropdown = ({
   className = "relative",
   iconClassName = "h-6 w-6",
-  badgeClassName = "absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-[20px] flex items-center justify-center shadow-lg"
+  badgeClassName = "absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-[20px] flex items-center justify-center shadow-lg",
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
-  const { 
-    notifications: contextNotifications, 
-    unreadCount, 
+  const {
+    notifications: contextNotifications,
+    unreadCount,
     isPolling,
     isInitialized,
     lastStatus,
     pollingError,
-    markAsRead: contextMarkAsRead, 
+    markAsRead: contextMarkAsRead,
     fetchUnreadCount,
-    fetchNotifications, 
-    loadMoreNotifications, 
-    hasMore, 
-    loading 
+    fetchNotifications,
+    loadMoreNotifications,
+    hasMore,
+    loading,
   } = useNotifications();
 
   // Close dropdown when clicking outside
@@ -36,9 +36,9 @@ const NotificationDropdown = ({
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
 
@@ -61,32 +61,33 @@ const NotificationDropdown = ({
   };
 
   const formatTimeAgo = (dateString) => {
-    if (!dateString) return 'Vừa xong';
+    if (!dateString) return "Vừa xong";
     const date = new Date(dateString);
-    if (isNaN(date.getTime())) return 'Vừa xong';
+    if (isNaN(date.getTime())) return "Vừa xong";
     const now = new Date();
     const diffInMinutes = Math.floor((now - date) / (1000 * 60));
-    
-    if (diffInMinutes < 1) return 'Vừa xong';
+
+    if (diffInMinutes < 1) return "Vừa xong";
     if (diffInMinutes < 60) return `${diffInMinutes} phút trước`;
-    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} giờ trước`;
+    if (diffInMinutes < 1440)
+      return `${Math.floor(diffInMinutes / 60)} giờ trước`;
     return `${Math.floor(diffInMinutes / 1440)} ngày trước`;
   };
 
   const getNotificationIcon = (type) => {
     switch (type) {
-      case 'property_view':
-        return '👁️';
-      case 'favorite':
-        return '❤️';
-      case 'message':
-        return '💬';
-      case 'price_update':
-        return '💰';
-      case 'contact_request':
-        return '📞';
+      case "property_view":
+        return "👁️";
+      case "favorite":
+        return "❤️";
+      case "message":
+        return "💬";
+      case "price_update":
+        return "💰";
+      case "contact_request":
+        return "📞";
       default:
-        return '🔔';
+        return "🔔";
     }
   };
 
@@ -100,7 +101,7 @@ const NotificationDropdown = ({
         <Bell className={iconClassName} />
         {unreadCount > 0 && (
           <div className={badgeClassName}>
-            {unreadCount > 99 ? '99+' : unreadCount}
+            {unreadCount > 99 ? "99+" : unreadCount}
           </div>
         )}
       </button>
@@ -121,7 +122,9 @@ const NotificationDropdown = ({
               {!isPolling && isInitialized && (
                 <span className="text-xs text-gray-400">Tạm dừng</span>
               )}
-              {loading && <span className="text-xs text-blue-600">Đang tải...</span>}
+              {loading && (
+                <span className="text-xs text-blue-600">Đang tải...</span>
+              )}
               {pollingError && (
                 <span className="text-xs text-red-600">Lỗi kết nối</span>
               )}
@@ -135,11 +138,15 @@ const NotificationDropdown = ({
           </div>
 
           {/* Notifications List */}
-          <div 
+          <div
             className="max-h-96 overflow-y-auto"
             onScroll={(e) => {
               const { scrollTop, scrollHeight, clientHeight } = e.target;
-              if (scrollHeight - scrollTop === clientHeight && hasMore && !loading) {
+              if (
+                scrollHeight - scrollTop === clientHeight &&
+                hasMore &&
+                !loading
+              ) {
                 loadMoreNotifications();
               }
             }}
@@ -158,17 +165,20 @@ const NotificationDropdown = ({
                   <div
                     key={notification.id}
                     className={`p-4 hover:bg-gray-50 transition-colors cursor-pointer ${
-                      !notification.is_read ? 'bg-blue-50' : ''
+                      !notification.is_read ? "bg-blue-50" : ""
                     }`}
                     onClick={async () => {
                       if (!notification.is_read) {
                         await markAsRead(notification.id);
-                      }   
+                      }
                       // Navigate based on notification type
-                      if (notification.type === 'contact_request' && notification.url) {
+                      if (
+                        notification.type === "contact_request" &&
+                        notification.url
+                      ) {
                         navigate(`${baseUrlWeb}${notification.url}`);
                       } else if (notification.url) {
-                        navigate(`${baseUrlWeb}${notification.url}`);  
+                        navigate(`${baseUrlWeb}${notification.url}`);
                       }
                       setIsOpen(false);
                     }}
@@ -179,21 +189,26 @@ const NotificationDropdown = ({
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium text-gray-900 line-clamp-2">
-                          <div 
-                            dangerouslySetInnerHTML={{ 
-                              __html: notification.message 
-                                ? formatMessageWithRanges(notification.message, notification.ranges)
-                                : 'Thông báo mới' 
-                            }} 
+                          <div
+                            dangerouslySetInnerHTML={{
+                              __html: notification.message
+                                ? formatMessageWithRanges(
+                                    notification.message,
+                                    notification.ranges
+                                  )
+                                : "Thông báo mới",
+                            }}
                           />
                         </div>
-                       
+
                         <div className="flex items-center justify-between mt-1">
                           <p className="text-xs text-gray-500 flex items-center">
                             <Clock className="h-3 w-3 mr-1" />
-                              {formatTimeAgo(notification.timestamp || notification.created_at)}
+                            {formatTimeAgo(
+                              notification.timestamp || notification.created_at
+                            )}
                           </p>
-                            {!notification.is_read ? (
+                          {!notification.is_read ? (
                             <div className="w-2 h-2 bg-red-300 rounded-full"></div>
                           ) : (
                             <div className="w-2 h-2 bg-green-300 rounded-full"></div>
@@ -245,7 +260,7 @@ const NotificationDropdown = ({
               <button
                 onClick={() => {
                   setIsOpen(false);
-                  navigate('/notifications');
+                  navigate("/notifications");
                 }}
                 className="w-full text-center text-sm font-medium text-red-600 hover:text-red-700 transition-colors"
               >
