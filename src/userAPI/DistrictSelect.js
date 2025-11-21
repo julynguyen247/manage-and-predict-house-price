@@ -96,3 +96,67 @@ function DistrictSelect({ selectedProvince, selectedProvinceId, onDistrictSelect
     const removeDistrict = (districtId) => {
         const newSelectedDistricts = selectedDistricts.filter(d => d.id !== districtId);
         setSelectedDistricts(newSelectedDistricts);
+        // Trả về danh sách district IDs và names
+        const districtIds = newSelectedDistricts.map(d => d.id);
+        const districtNames = newSelectedDistricts.map(d => d.name);
+        if (onDistrictSelect) {
+            onDistrictSelect(districtIds, districtNames);
+        }
+    };
+
+    const filteredDistricts = districts.filter(district =>
+        district.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
+        !selectedDistricts.some(d => d.id === district.id)
+    );
+
+    // Lọc popular districts để không hiển thị những cái đã chọn
+    const filteredPopularDistricts = popularDistricts.filter(district =>
+        !selectedDistricts.some(d => d.name === district.name)
+    );
+
+    return (
+        <div className="relative w-full z-20" ref={dropdownRef}>
+            <div className="flex items-center bg-white border border-gray-300 rounded-lg min-h-[48px] focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 overflow-hidden">
+                <Search className="h-5 w-5 text-gray-500 ml-3 mr-2 flex-shrink-0" />
+                <div className="flex flex-nowrap items-center gap-1 py-2 pr-2 flex-1 overflow-x-auto">
+                    {selectedDistricts.map((district) => (
+                        <span
+                            key={district.id}
+                            className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 text-sm rounded-md hover:bg-blue-200 transition-colors"
+                        >
+                            {district.name}
+                            <X
+                                className="h-3 w-3 ml-1 cursor-pointer hover:text-red-600"
+                                onClick={() => removeDistrict(district.id)}
+                            />
+                        </span>
+                    ))}
+                    <input
+                        type="text"
+                        placeholder={
+                            !isProvinceSelected
+                                ? 'Chọn tỉnh thành để bắt đầu'
+                                : (selectedDistricts.length === 0
+                                    ? `Nhập tối đa ${maxSelections} địa điểm tại ${selectedProvince}. Ví dụ: Quận 1`
+                                    : `Thêm địa điểm (còn lại ${Math.max(0, maxSelections - selectedDistricts.length)})`)
+                        }
+                        className="flex-1 outline-none text-sm min-w-[220px] placeholder-gray-400 truncate"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onFocus={() => {
+                            if (!isProvinceSelected) {
+                                setIsOpen(false);
+                                if (onRequireProvince) onRequireProvince();
+                            } else {
+                                setIsOpen(true);
+                            }
+                        }}
+                        readOnly={!isProvinceSelected}
+                        onClick={() => {
+                            if (!isProvinceSelected && onRequireProvince) {
+                                onRequireProvince();
+                            }
+                        }}
+                        disabled={selectedDistricts.length >= maxSelections}
+                    />
+                </div>
