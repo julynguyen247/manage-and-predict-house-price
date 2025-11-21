@@ -160,3 +160,128 @@ function DistrictSelect({ selectedProvince, selectedProvinceId, onDistrictSelect
                         disabled={selectedDistricts.length >= maxSelections}
                     />
                 </div>
+                 {/* Indicator cho số lượng đã chọn */}
+                <div className="flex items-center mr-3">
+                    <span className={`text-xs px-2 py-1 rounded-full ${
+                        selectedDistricts.length >= maxSelections 
+                            ? 'bg-red-100 text-red-600' 
+                            : 'bg-gray-100 text-gray-600'
+                    }`}>
+                        {selectedDistricts.length}/{maxSelections}
+                    </span>
+                </div>
+            </div>
+
+            {isOpen && isProvinceSelected && (
+                <div className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-lg shadow-xl z-40 mt-1 max-h-96 overflow-hidden">
+                    {loading ? (
+                        <div className="p-4 text-center">
+                            <div className="inline-flex items-center">
+                                <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin mr-2"></div>
+                                <span className="text-gray-600">Đang tải danh sách quận huyện...</span>
+                            </div>
+                        </div>
+                    ) : error ? (
+                        <div className="p-4 text-center">
+                            <div className="inline-flex items-center text-red-600">
+                                <AlertCircle className="h-4 w-4 mr-2" />
+                                <span>{error}</span>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="max-h-96 overflow-y-auto">
+                            <div className="grid grid-cols-1 gap-4 p-4">
+                                {/* Thông tin tỉnh được chọn */}
+                                <div className="bg-blue-50 p-3 rounded-lg">
+                                    <h3 className="font-semibold text-blue-800 mb-2">
+                                        Đang tìm kiếm tại: {selectedProvince}
+                                    </h3>
+                                    <div className="text-sm text-blue-600">
+                                        {selectedDistricts.length > 0 && (
+                                            <span>Đã chọn {selectedDistricts.length} địa điểm</span>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Danh sách tìm kiếm */}
+                                {searchTerm && filteredDistricts.length > 0 && (
+                                    <div className="space-y-2">
+                                        <h3 className="font-semibold text-gray-800">
+                                            Kết quả tìm kiếm "{searchTerm}"
+                                        </h3>
+                                        <div className="max-h-40 overflow-y-auto space-y-1">
+                                            {filteredDistricts.slice(0, 10).map((district) => (
+                                                <div
+                                                    key={district.id}
+                                                    className="flex items-center p-2 hover:bg-gray-100 rounded cursor-pointer transition-colors"
+                                                    onClick={() => handleDistrictSelect(district)}
+                                                >
+                                                    <MapPin className="h-4 w-4 text-gray-500 mr-2" />
+                                                    <span className="text-sm text-gray-700 flex-1">
+                                                        {district.name}, {selectedProvince}
+                                                    </span>
+                                                    <span className="text-xs text-green-600 font-medium">
+                                                        Chọn
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+    
+                                {/* Tất cả quận huyện từ API */}
+                                {!searchTerm && districts.length > 0 && (
+                                    <div className="space-y-2">
+                                        <h3 className="font-semibold text-gray-800">
+                                            Tất cả quận huyện ({districts.length})
+                                        </h3>
+                                        <div className="max-h-40 overflow-y-auto space-y-1">
+                                            {districts
+                                                .filter(district => !selectedDistricts.some(d => d.id === district.id))
+                                                .map((district) => (
+                                                <div
+                                                    key={district.id}
+                                                    className="flex items-center p-2 hover:bg-gray-100 rounded cursor-pointer transition-colors"
+                                                    onClick={() => handleDistrictSelect(district)}
+                                                >
+                                                    <MapPin className="h-4 w-4 text-gray-500 mr-2" />
+                                                    <span className="text-sm text-gray-700 flex-1">
+                                                        {district.name}, {selectedProvince}
+                                                    </span>
+                                                    <span className="text-xs text-green-600 font-medium">
+                                                        Chọn
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Thông báo khi không có kết quả */}
+                                {searchTerm && filteredDistricts.length === 0 && (
+                                    <div className="text-center py-4">
+                                        <div className="text-gray-500 text-sm">
+                                            Không tìm thấy kết quả cho "{searchTerm}"
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Thông báo khi đã chọn đủ giới hạn */}
+                                {selectedDistricts.length >= maxSelections && (
+                                    <div className="bg-orange-50 border border-orange-200 p-3 rounded-lg">
+                                        <div className="text-orange-800 text-sm text-center">
+                                            {`Bạn đã chọn đủ ${maxSelections} địa điểm. Hãy bỏ chọn một số địa điểm để thêm địa điểm mới.`}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
+export default DistrictSelect;
