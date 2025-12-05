@@ -185,7 +185,7 @@ const apiService = {
       throw error;
     }
   },
-  
+
   // POST request without caching
   async post(endpoint, data = {}) {
     const url = `${baseUrl}${endpoint}`;
