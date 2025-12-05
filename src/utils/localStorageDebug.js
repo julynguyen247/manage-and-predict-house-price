@@ -39,4 +39,22 @@ export const debugLocalStorage = () => {
     
     return keysToRemove.length;
   };
+  // Clear tất cả dữ liệu localStorage (trừ token)
+export const clearAllDataExceptToken = () => {
+    const token = localStorage.getItem('token');
+    localStorage.clear();
+    if (token) {
+      localStorage.setItem('token', token);
+      console.log('🔑 Preserved token');
+    }
+    console.log('🧹 Cleared all localStorage data except token');
+  };
   
+  // Export default
+  const localStorageDebug = {
+    debugLocalStorage,
+    clearNotificationData,
+    clearAllDataExceptToken
+  };
+  
+  export default localStorageDebug;
