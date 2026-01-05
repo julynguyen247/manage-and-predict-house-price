@@ -18,7 +18,355 @@ import PropertyTypeSelect from '../useAPI/PropertyTypeSelect';
 import apiService from '../utils/api';
 import { baseUrl } from '../base';
 
+const API_POST_PROPERTY = `${baseUrl}properties/`;
 
+
+// Fix Leaflet marker icons (same as PropertyMap)
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
+  iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+});
+
+const DEFAULT_CENTER = { lat: 10.8231, lng: 106.6297 }; // Ho Chi Minh fallback
+
+function normalizeText(text) {
+  return (text || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function includesNormalized(haystack, needle) {
+  if (!haystack || !needle) return false;
+  return normalizeText(haystack).includes(normalizeText(needle));
+}
+
+function RecenterOnPosition({ position }) {
+  const map = useMap();
+  useEffect(() => {
+    if (position) {
+      map.setView([position.lat, position.lng], 15, { animate: true });
+    }
+  }, [map, position]);
+  return null;
+}
+
+function ClickToMoveMarker({ onChange }) {
+  useMapEvents({
+    click: (e) => {
+      const { lat, lng } = e.latlng;
+      if (onChange) onChange({ lat, lng });
+      console.log("lat", lat);
+      console.log("lng", lng);
+    }
+  });
+  return null;
+}
+
+function PostProperty() {
+  const navigate = useNavigate();
+  const mapboxToken = process.env.REACT_APP_MAPBOX_TOKEN;
+  // console.log("mapboxToken", mapboxToken);
+
+  // Steps: 1 -> basic info, 2 -> map + details + submit
+  const [step, setStep] = useState(1);
+
+  // Step 1 state
+  const [listingType, setListingType] = useState('ban'); // 'ban' | 'thue'
+  const [provinceName, setProvinceName] = useState('');
+  const [provinceId, setProvinceId] = useState(null);
+  const [districtIds, setDistrictIds] = useState([]);
+  const [districtNames, setDistrictNames] = useState([]);
+  const [address, setAddress] = useState('');
+  const [price, setPrice] = useState(''); // triệu
+  const [area, setArea] = useState(''); // m2
+  const [selectedPropertyTypeIds, setSelectedPropertyTypeIds] = useState([]);
+  const [selectedPropertyTypeNames, setSelectedPropertyTypeNames] = useState([]);
+
+  // Step 2 state
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [legalStatus, setLegalStatus] = useState(''); // numeric code
+  
+  // Attributes state
+  const [attributesList, setAttributesList] = useState([]);
+  const [selectedAttributes, setSelectedAttributes] = useState([]); // [{attribute_id, value, name, unit}]
+  const [openForms, setOpenForms] = useState([]); // [{id, attributeId, value}]
+
+  // Map / geocode
+  const [position, setPosition] = useState(null);
+  const [geocoding, setGeocoding] = useState(false);
+  const [geoError, setGeoError] = useState('');
+
+  // Step 3 state (images)
+  const [thumbnailFile, setThumbnailFile] = useState(null);
+  const [thumbnailPreview, setThumbnailPreview] = useState('');
+  const [galleryFiles, setGalleryFiles] = useState([]);
+  const [galleryPreviews, setGalleryPreviews] = useState([]);
+  const [thumbProgress, setThumbProgress] = useState(0);
+  const [galleryProgress, setGalleryProgress] = useState([]);
+
+  const fullAddress = useMemo(() => {
+    const parts = address;
+    console.log(parts);
+    return parts;
+  }, [address, districtNames, provinceName]);
+
+  // Fetch attributes khi property_type thay đổi
+  useEffect(() => {
+    const fetchAttributes = async () => {
+      if (selectedPropertyTypeIds.length === 1) {
+        try {
+          const response = await fetch(`${baseUrl}attributes/?property_type_id=${selectedPropertyTypeIds[0]}`);
+          if (response.ok) {
+            const data = await response.json();
+            setAttributesList(data.data || []);
+            setSelectedAttributes([]);
+            setOpenForms([]);
+          }
+        } catch (error) {
+          console.error('Error fetching attributes:', error);
+        }
+      } else {
+        setAttributesList([]);
+        setSelectedAttributes([]);
+        setOpenForms([]);
+      }
+    };
+    fetchAttributes();
+  }, [selectedPropertyTypeIds]);
+
+  // Lấy danh sách attributes chưa được thêm vào danh sách
+  const availableAttributes = attributesList.filter(
+    attr => !selectedAttributes.some(selected => selected.attribute_id === attr.id)
+  );
+
+  // Mở form thêm attribute mới
+  const handleOpenForm = () => {
+    setOpenForms([...openForms, { id: Date.now(), attributeId: '', value: '' }]);
+  };
+
+  // Cập nhật form
+  const handleUpdateForm = (formId, field, value) => {
+    setOpenForms(openForms.map(form => 
+      form.id === formId ? { ...form, [field]: value } : form
+    ));
+  };
+
+  // Thêm attribute từ form
+  const handleAddAttribute = (formId) => {
+    const form = openForms.find(f => f.id === formId);
+    if (!form || !form.attributeId || !form.value.trim()) return;
+    
+    const attr = attributesList.find(a => a.id === parseInt(form.attributeId));
+    if (attr && !selectedAttributes.some(s => s.attribute_id === attr.id)) {
+      setSelectedAttributes([...selectedAttributes, {
+        attribute_id: attr.id,
+        value: form.value.trim(),
+        name: attr.name,
+        unit: attr.unit
+      }]);
+      setOpenForms(openForms.filter(f => f.id !== formId));
+    }
+  };
+
+  // Đóng form
+  const handleCloseForm = (formId) => {
+    setOpenForms(openForms.filter(f => f.id !== formId));
+  };
+
+  // Xóa attribute
+  const handleRemoveAttribute = (attributeId) => {
+    setSelectedAttributes(selectedAttributes.filter(a => a.attribute_id !== attributeId));
+  };
+
+  const handleProvinceSelect = (name, id) => {
+    setProvinceName(name || '');
+    setProvinceId(id || null);
+    setDistrictIds([]);
+    setDistrictNames([]);
+  };
+
+  const handleDistrictSelect = (ids, names) => {
+    setDistrictIds(Array.isArray(ids) ? ids : []);
+    setDistrictNames(Array.isArray(names) ? names : []);
+  };
+
+  const validateStep1 = () => {
+    if (!listingType) return 'Vui lòng chọn Bán hoặc Thuê';
+    if (!provinceId) return 'Vui lòng chọn tỉnh/thành';
+    if (!districtIds || districtIds.length === 0) return 'Vui lòng chọn quận/huyện';
+    if (!address.trim()) return 'Vui lòng nhập địa chỉ cụ thể';
+    // Yêu cầu địa chỉ phải bao gồm cả quận/huyện và tỉnh/thành (so khớp không dấu)
+    const firstDistrictName = districtNames && districtNames[0];
+    if (provinceName && !includesNormalized(address, provinceName)) {
+      return 'Vui lòng nhập địa chỉ có cả tên tỉnh/thành (ví dụ: "..., ' + provinceName + '")';
+    }
+    if (firstDistrictName && !includesNormalized(address, firstDistrictName)) {
+      return 'Vui lòng nhập địa chỉ có cả tên quận/huyện (ví dụ: "..., ' + firstDistrictName + '")';
+    }
+    if (!price || isNaN(Number(price))) return 'Vui lòng nhập mức giá hợp lệ (triệu)';
+    if (!area || isNaN(Number(area))) return 'Vui lòng nhập diện tích hợp lệ (m²)';
+    if (!selectedPropertyTypeIds || selectedPropertyTypeIds.length !== 1) return 'Vui lòng chọn 1 loại nhà đất';
+    return '';
+  };
+
+  const validateStep2 = () => {
+    if (!title.trim()) return 'Tiêu đề là bắt buộc';
+    if (!description.trim()) return 'Mô tả là bắt buộc';
+    if (!position) return 'Không xác định được vị trí trên bản đồ';
+    return '';
+  };
+
+  const geocodeWithMapbox = async (query) => {
+    if (!mapboxToken) return null;
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
+      query
+    )}.json?access_token=${mapboxToken}&limit=1&language=vi`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      if (res.status === 401) {
+        console.warn('Mapbox token không hợp lệ hoặc đã hết hạn. Sẽ sử dụng OpenStreetMap thay thế.');
+      }
+      throw new Error(`Mapbox geocoding error: ${res.status}`);
+    }
+    const data = await res.json();
+    const feature = data.features && data.features[0];
+    if (feature && feature.center && feature.center.length === 2) {
+      const [lng, lat] = feature.center;
+      return { lat, lng };
+    }
+    return null;
+  };
+
+  const geocodeWithNominatim = async (query) => {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+      query
+    )}`;
+    const res = await fetch(url, { headers: { 'Accept-Language': 'vi' } });
+    if (!res.ok) throw new Error(`OSM geocoding error: ${res.status}`);
+    const data = await res.json();
+    const first = data && data[0];
+    if (first) {
+      return { lat: parseFloat(first.lat), lng: parseFloat(first.lon) };
+    }
+    return null;
+  };
+
+  const handleContinue = async () => {
+    const err = validateStep1();
+    if (err) {
+      alert(err);
+      return;
+    }
+
+    setGeocoding(true);
+    setGeoError('');
+    try {
+      let pos = null;
+      let usedFallback = false;
+      try {
+        pos = await geocodeWithMapbox(fullAddress);
+      } catch (e) {
+        console.warn('Mapbox geocoding failed, trying OpenStreetMap:', e.message);
+        usedFallback = true;
+      }
+      if (!pos) {
+        try {
+          pos = await geocodeWithNominatim(fullAddress);
+          if (pos && usedFallback) {
+            console.log('Đã sử dụng OpenStreetMap để tìm vị trí');
+          }
+        } catch (nominatimError) {
+          console.error('OpenStreetMap geocoding also failed:', nominatimError);
+        }
+      }
+      setPosition(pos || DEFAULT_CENTER);
+      if (!pos) {
+        setGeoError('Không tìm thấy vị trí từ địa chỉ. Bạn có thể kéo pin để chỉnh vị trí trên bản đồ.');
+      }
+      setStep(2);
+    } catch (e) {
+      console.error('Geocoding error:', e);
+      setGeoError('Không tìm thấy vị trí từ địa chỉ. Bạn có thể kéo pin để chỉnh vị trí trên bản đồ.');
+      setPosition(DEFAULT_CENTER);
+      setStep(2);
+    } finally {
+      setGeocoding(false);
+    }
+  };
+
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleFinalize = async () => {
+    // Ensure step 2 required fields are valid before finalizing
+    const err = validateStep2();
+    if (err) {
+      alert(err);
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      // Create FormData for multipart/form-data submission
+      const formData = new FormData();
+      
+      // Add text fields
+      formData.append('title', title.trim());
+      formData.append('description', description.trim());
+      formData.append('tab', listingType);
+      formData.append('province', provinceId);
+      formData.append('district', districtIds[0]);
+      formData.append('address', fullAddress);
+      formData.append('price', Number(price));
+      formData.append('area_m2', Number(area));
+      formData.append('price_per_m2', parseFloat((Number(price) / Number(area)).toFixed(2)));
+      formData.append('coord_x', position?.lng ?? '');
+      formData.append('coord_y', position?.lat ?? '');
+      formData.append('property_type', selectedPropertyTypeIds[0] || '');
+      formData.append('legal_status', legalStatus ? Number(legalStatus) : '');
+
+      // Add attributes
+      if (selectedAttributes.length > 0) {
+        const attributes = selectedAttributes.map(attr => ({
+          attribute_id: attr.attribute_id,
+          value: attr.value
+        }));
+        formData.append('attributes', JSON.stringify(attributes));
+      }
+
+      // Add files
+      if (thumbnailFile) {
+        formData.append('thumbnail', thumbnailFile);
+      }
+      
+      if (galleryFiles && galleryFiles.length > 0) {
+        galleryFiles.forEach((file, index) => {
+          formData.append('images', file);
+        });
+      }
+
+      // Create property with FormData
+      const res = await apiService.postFormData('properties/', formData);
+      const propertyId = res?.data?.id || res?.id;
+      if (!propertyId) throw new Error('Không lấy được ID bất động sản sau khi tạo');
+
+      alert('Đăng tin thành công!');
+      navigate(`/property/${propertyId}`);
+    } catch (e) {
+      console.error('Finalize submit error:', e);
+      alert('Có lỗi khi gửi dữ liệu hoặc tải ảnh. Vui lòng thử lại.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const mapTileUrl = mapboxToken
+    ? `https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/256/{z}/{x}/{y}@2x?access_token=${mapboxToken}`
+    : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 
   return (
     <div className="min-h-screen bg-gray-50">
