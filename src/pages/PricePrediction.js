@@ -72,7 +72,337 @@ function PricePrediction() {
   });
   const [centerMap, setCenterMap] = useState(false);
 
+  // Fetch favorite IDs
+  useEffect(() => {
+    const fetchFavoriteIds = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
 
+        const response = await fetch(`${baseUrl}favourites/listID/`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          setFavoriteIds(data.data || []);
+        }
+      } catch (error) {
+        console.error('Error fetching favorite IDs:', error);
+      }
+    };
+
+    fetchFavoriteIds();
+  }, []);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const propertyTypesRes = await fetch(`${baseUrl}property-types/`);
+        const propertyTypesData = await propertyTypesRes.json();
+        setPropertyTypes(propertyTypesData.data || []);
+
+        const provincesRes = await fetch(`${baseUrl}provinces/`);
+        const provincesData = await provincesRes.json();
+        setProvinces(provincesData.data || []);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      }
+    };
+    fetchData();
+  }, []);
+
+  // Fetch districts when province changes
+  useEffect(() => {
+    const fetchDistricts = async () => {
+      if (!formData.province) {
+        setDistricts([]);
+        return;
+      }
+
+      try {
+        // Find the province by code to get its ID for the districts API
+        const selectedProvince = provinces.find(p => p.code === parseInt(formData.province));
+        if (!selectedProvince) {
+          setDistricts([]);
+          return;
+        }
+
+        const response = await fetch(`${baseUrl}provinces/${selectedProvince.id}/districts/`);
+        const data = await response.json();
+        setDistricts(data.data || []);
+      } catch (error) {
+        console.error('Error fetching districts:', error);
+        setDistricts([]);
+      }
+    };
+
+    fetchDistricts();
+  }, [formData.province, provinces]);
+
+  // Helper function to check property type name
+  const getPropertyTypeName = (propertyTypeCode) => {
+    if (!propertyTypeCode) return '';
+    const selectedType = propertyTypes.find(pt => pt.code === parseInt(propertyTypeCode));
+    return selectedType ? selectedType.name.toLowerCase() : '';
+  };
+
+  // Check if property type is apartment (căn hộ chung cư, chung cư mini)
+  const isApartmentType = (propertyTypeCode) => {
+    const typeName = getPropertyTypeName(propertyTypeCode);
+    return typeName.includes('căn hộ chung cư') || 
+           typeName.includes('chung cư mini') || 
+           typeName.includes('căn hộ dịch vụ');
+  };
+
+  // Check if property type is land (bán đất, đất nền, đất nền dự án)
+  const isLandType = (propertyTypeCode) => {
+    const typeName = getPropertyTypeName(propertyTypeCode);
+    return typeName.includes('bán đất') || 
+           typeName.includes('đất nền') ||
+           typeName.includes('đất nền dự án');
+  };
+
+  const handleInputChange = (field, value) => {
+    setFormData(prev => {
+      const newData = { ...prev };
+
+      // Allow decimal numbers for area & frontage, integers for the rest
+      const decimalFields = ['area', 'frontage'];
+      const integerFields = ['bedrooms', 'floors'];
+
+      if (decimalFields.includes(field)) {
+        const decimalPattern = /^\d*\.?\d*$/;
+        if (value === '' || decimalPattern.test(value)) {
+          const numericValue = value === '' ? '' : parseFloat(value);
+          newData[field] = Number.isNaN(numericValue) ? '' : (numericValue < 0 ? '0' : value);
+        }
+      } else if (integerFields.includes(field)) {
+        const intValue = value === '' ? '' : parseInt(value, 10);
+        newData[field] = Number.isNaN(intValue) ? '' : Math.max(0, intValue).toString();
+      } else {
+        newData[field] = value;
+      }
+      
+      // Reset district when province changes
+      if (field === 'province') {
+        newData.district = '';
+      }
+      
+      // Handle property type changes
+      if (field === 'propertyType') {
+        const propertyTypeCode = value;
+        
+        // If apartment type: set frontage and floors to 0
+        if (isApartmentType(propertyTypeCode)) {
+          newData.frontage = '0';
+          newData.floors = '0';
+        }
+        
+        // If land type: set bedrooms and floors to 0
+        if (isLandType(propertyTypeCode)) {
+          newData.bedrooms = '0';
+          newData.floors = '0';
+        }
+      }
+      
+      return newData;
+    });
+  };
+
+  const handleMapClick = (lat, lng) => {
+    setFormData(prev => ({ ...prev, coordinates: { lat, lng } }));
+  };
+
+  const searchAddressOnMap = async () => {
+    // Kiểm tra đã chọn đủ tỉnh/thành phố và quận/huyện chưa
+    if (!formData.province || !formData.district) {
+      alert('Vui lòng chọn đầy đủ Tỉnh/Thành phố và Quận/Huyện trước khi tìm kiếm địa chỉ');
+      return;
+    }
+
+    if (!formData.detailedAddress.trim()) {
+      alert('Vui lòng nhập địa chỉ chi tiết để tìm kiếm');
+      return;
+    }
+
+    try {
+      // Lấy tên tỉnh/thành phố và quận/huyện đã chọn
+      const selectedProvince = provinces.find(p => p.code === parseInt(formData.province));
+      const selectedDistrict = districts.find(d => d.code === parseInt(formData.district));
+      
+      if (!selectedProvince || !selectedDistrict) {
+        alert('Không tìm thấy thông tin tỉnh/thành phố hoặc quận/huyện. Vui lòng thử lại.');
+        return;
+      }
+
+      // Tạo query string: địa chỉ chi tiết + quận huyện + tỉnh thành phố
+      const searchQuery = `${formData.detailedAddress.trim()}, ${selectedDistrict.name}, ${selectedProvince.name}, Vietnam`;
+      const encodedQuery = encodeURIComponent(searchQuery);
+      
+      // Use Mapbox Geocoding API for better accuracy
+      const response = await fetch(
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodedQuery}.json?access_token=${MAPBOX_ACCESS_TOKEN}&country=VN&limit=1`
+      );
+      const data = await response.json();
+
+      if (data.features && data.features.length > 0) {
+        const location = data.features[0];
+        const [lng, lat] = location.center; // Mapbox returns [lng, lat]
+        console.log("location", location.center);
+        
+        // Update coordinates and trigger map centering
+        setFormData(prev => ({ 
+          ...prev, 
+          coordinates: { lat, lng } 
+        }));
+        
+        // Trigger map to center on new location
+        setCenterMap(true);
+        
+        // Reset centerMap flag after a short delay
+        setTimeout(() => setCenterMap(false), 100);
+      } else {
+        alert('Không tìm thấy địa chỉ. Vui lòng thử lại với địa chỉ khác.');
+      }
+    } catch (error) {
+      console.error('Error searching address:', error);
+      alert('Có lỗi xảy ra khi tìm kiếm địa chỉ. Vui lòng thử lại.');
+    }
+  };
+
+  const getCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      alert('Trình duyệt của bạn không hỗ trợ định vị GPS');
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setFormData(prev => ({
+          ...prev,
+          coordinates: { lat: latitude, lng: longitude }
+        }));
+        
+        // Trigger map to center on current location
+        setCenterMap(true);
+        setTimeout(() => setCenterMap(false), 100);
+      },
+      (error) => {
+        console.error('Error getting location:', error);
+        alert('Không thể lấy vị trí hiện tại. Vui lòng kiểm tra quyền truy cập vị trí.');
+      }
+    );
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!user) {
+      alert('Vui lòng đăng nhập để sử dụng tính năng dự đoán giá!');
+      return;
+    }
+
+    // Check required fields based on property type
+    const requiredFields = ['propertyType', 'province', 'district', 'area', 'legalStatus'];
+    
+    // Add conditional required fields
+    if (!isApartmentType(formData.propertyType)) {
+      requiredFields.push('frontage');
+    }
+    if (!isApartmentType(formData.propertyType) && !isLandType(formData.propertyType)) {
+      requiredFields.push('floors');
+    }
+    if (!isLandType(formData.propertyType)) {
+      requiredFields.push('bedrooms');
+    }
+    
+    const missingFields = requiredFields.filter(field => !formData[field]);
+    
+    if (missingFields.length > 0) {
+      alert('Vui lòng điền đầy đủ thông tin!');
+      return;
+    }
+
+    setLoading(true);
+    setPredictionResult(null);
+
+    try {
+      const token = localStorage.getItem('token');
+      
+       const selectedPropertyType = propertyTypes.find(pt => pt.code === parseInt(formData.propertyType));
+       const selectedProvince = provinces.find(p => p.code === parseInt(formData.province));
+       const selectedDistrict = districts.find(d => d.code === parseInt(formData.district));
+
+       // Prepare request data with proper defaults for disabled fields
+       const isApartment = isApartmentType(formData.propertyType);
+       const isLand = isLandType(formData.propertyType);
+       
+       const requestData = {
+         input_data: {
+           "loại nhà đất": selectedPropertyType?.code || 0,
+           "mã huyện": selectedDistrict?.code || 0,
+           "diện tích": parseFloat(formData.area) || 0,
+           "mặt tiền": isApartment ? 0 : (parseFloat(formData.frontage) || 0),
+           "phòng ngủ": isLand ? 0 : (parseInt(formData.bedrooms) || 0),
+           "pháp lý": parseInt(formData.legalStatus) || 0,
+           "tọa độ x": formData.coordinates.lat || 0,
+           "tọa độ y": formData.coordinates.lng || 0,
+           "số tầng": (isApartment || isLand) ? 0 : (parseInt(formData.floors) || 0),
+           "mã tỉnh": selectedProvince?.code || 0
+         }
+       };
+
+         const response = await fetch(`${baseUrl}predict-requests/`, {
+         method: 'POST',
+         headers: {
+           'Content-Type': 'application/json',
+           'Authorization': `Bearer ${token}`
+         },
+         body: JSON.stringify(requestData)
+       });
+       console.log("response", response);
+
+       // Check for token expiration
+       const apiCheck = await handleApiResponse(response);
+       if (apiCheck.expired) {
+         return; // handleApiResponse already redirected
+       }
+
+       const result = await response.json();
+       console.log("result", result);
+       
+       if (response.ok) {
+         setPredictionResult(result);
+       } else {
+         alert('Có lỗi xảy ra khi dự đoán giá. Vui lòng thử lại!');
+       }
+    } catch (error) {
+      console.error('Error predicting price:', error);
+      alert('Có lỗi xảy ra khi dự đoán giá. Vui lòng thử lại!');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      propertyType: '',
+      province: '',
+      district: '',
+      detailedAddress: '',
+      area: '',
+      frontage: '',
+      bedrooms: '',
+      legalStatus: '',
+      floors: '',
+      coordinates: { lat: 10.8624, lng: 106.5894 }
+    });
+    setPredictionResult(null);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
